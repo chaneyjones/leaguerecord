@@ -26,81 +26,98 @@ function regionToRegionGroup(region) {
 
 app.get('/recentrecord/:region/:gameName/:tagLine', async (req, res) => {
   const { region, gameName, tagLine } = req.params;
-  const MAX_SESSION_GAP_HOURS = 12; // Consider games <12h apart part of the same session
+  const MAX_SESSION_GAP_HOURS = 12;
 
   try {
-
+    // 1. Get PUUID
     const accountRes = await axios.get(
       `https://${regionToRegionGroup(region)}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${gameName}/${tagLine}`,
-      { headers: { 'X-Riot-Token': RIOT_API_KEY } }
+      { 
+        headers: { 'X-Riot-Token': RIOT_API_KEY },
+        timeout: 5000
+      }
     );
+    
+    if (!accountRes.data?.puuid) {
+      return res.status(404).send('Player not found');
+    }
     const puuid = accountRes.data.puuid;
 
-
+    // 2. Get match IDs (newest first)
     const matchIdsRes = await axios.get(
-      `https://${regionToRegionGroup(region)}.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids?count=100`,
-      { headers: { 'X-Riot-Token': RIOT_API_KEY } }
+      `https://${regionToRegionGroup(region)}.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids?start=0&count=100`,
+      { 
+        headers: { 'X-Riot-Token': RIOT_API_KEY },
+        timeout: 5000
+      }
     );
-    const matchIds = matchIdsRes.data;
+    
+    const matchIds = matchIdsRes.data || [];
+    if (matchIds.length === 0) {
+      return res.send(`${gameName}#${tagLine} has no recent matches`);
+    }
 
-
+    // 3. Get match details in parallel
     const matchDetails = await Promise.all(
       matchIds.map(matchId =>
         axios.get(
           `https://${regionToRegionGroup(region)}.api.riotgames.com/lol/match/v5/matches/${matchId}`,
-          { headers: { 'X-Riot-Token': RIOT_API_KEY } }
-        )
+          { 
+            headers: { 'X-Riot-Token': RIOT_API_KEY },
+            timeout: 5000
+          }
+        ).catch(e => null) // Skip failed requests
       )
     );
 
-    
-    const matchesWithTimestamps = matchDetails
+    // 4. Process valid matches only
+    const validMatches = matchDetails
+      .filter(match => match?.data?.info)
       .map(match => ({
-        timestamp: match.data.info.gameCreation, // Unix timestamp in ms
+        timestamp: match.data.info.gameCreation,
         win: match.data.info.participants.find(p => p.puuid === puuid)?.win
       }))
-      .sort((a, b) => a.timestamp - b.timestamp); // Oldest first
+      .sort((a, b) => b.timestamp - a.timestamp); // Newest first
 
-   
+    if (validMatches.length === 0) {
+      return res.send('No valid match data found');
+    }
+
+    // 5. Detect sessions (working backwards from newest)
     const sessions = [];
-    let currentSession = [];
+    let currentSession = [validMatches[0]]; // Start with newest match
 
-    for (let i = 0; i < matchesWithTimestamps.length; i++) {
-      if (i === 0) {
-        currentSession.push(matchesWithTimestamps[i]);
+    for (let i = 1; i < validMatches.length; i++) {
+      const timeDiff = (currentSession[0].timestamp - validMatches[i].timestamp) / (1000 * 60 * 60);
+      
+      if (timeDiff < MAX_SESSION_GAP_HOURS) {
+        currentSession.unshift(validMatches[i]); // Add to beginning (maintain order)
       } else {
-        const prevTime = matchesWithTimestamps[i - 1].timestamp;
-        const currTime = matchesWithTimestamps[i].timestamp;
-        const hoursBetweenGames = (currTime - prevTime) / (1000 * 60 * 60);
-
-        if (hoursBetweenGames < MAX_SESSION_GAP_HOURS) {
-          currentSession.push(matchesWithTimestamps[i]);
-        } else {
-          sessions.push(currentSession);
-          currentSession = [matchesWithTimestamps[i]];
-        }
+        sessions.push(currentSession);
+        currentSession = [validMatches[i]];
       }
     }
-    if (currentSession.length > 0) sessions.push(currentSession);
+    sessions.push(currentSession); // Add the last session
 
- 
-    const latestSession = sessions[sessions.length - 1] || [];
+    // 6. Get the most recent session (first in array)
+    const latestSession = sessions[0] || [];
     const wins = latestSession.filter(m => m.win).length;
     const losses = latestSession.filter(m => !m.win).length;
 
- 
-    res.send(`
-      🎮 ${gameName}#${tagLine}'s latest gaming session:
-      ✅ Wins: ${wins} | ❌ Losses: ${losses}
-      📅 ${latestSession.length} games played within ${MAX_SESSION_GAP_HOURS}h of each other
-    `);
+    // 7. Format response
+    res.send(`${gameName}#${tagLine}'s recent record: ${wins} wins, ${losses} losses`);
 
   } catch (error) {
-    console.error('Error:', error.response?.data || error.message);
+    console.error('API Error:', {
+      message: error.message,
+      url: error.config?.url,
+      status: error.response?.status,
+      data: error.response?.data
+    });
     res.status(500).send('Error detecting gaming sessions');
   }
 });
-app.listen(PORT, "0.0.0.0", () => {  
-  console.log(`Server running on port ${PORT}`);
 
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
 });
