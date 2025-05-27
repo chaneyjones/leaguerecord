@@ -26,7 +26,7 @@ function regionToRegionGroup(region) {
 
 app.get('/recentrecord/:region/:gameName/:tagLine', async (req, res) => {
   const { region, gameName, tagLine } = req.params;
-  const MAX_SESSION_GAP_HOURS = 12; 
+  const MAX_SESSION_GAP_HOURS = 9; 
 
   try {
 
