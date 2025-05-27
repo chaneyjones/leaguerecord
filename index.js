@@ -124,8 +124,8 @@ app.get('/recentrecord/:region/:gameName/:tagLine', async (req, res) => {
     }
 
     res.send(`${gameName}'s recent record: ${wins} wins, ${losses} losses${lpChangeText}`);
-
- catch (error) {
+  
+} catch (error) {
   const status = error.response?.status;
   const data = error.response?.data;
   console.error('Error:', status, data || error.message);
