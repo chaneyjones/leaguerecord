@@ -5,8 +5,6 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const RIOT_API_KEY = process.env.RIOT_API_KEY;
 
-const path = require('path');
-app.use(express.static(path.join(__dirname)));
 
 app.use(express.json());
 
@@ -26,6 +24,11 @@ function regionToRegionGroup(region) {
   };
   return groups[region.toLowerCase()] || 'americas';
 }
+const path = require('path');
+
+app.get('/recentrecord/:region/:username/:tagline/riot.txt', (req, res) => {
+  res.sendFile(path.join(__dirname, 'riot.txt'));
+});
 
 app.get('/recentrecord/:region/:gameName/:tagLine', async (req, res) => {
   const { region, gameName, tagLine } = req.params;
