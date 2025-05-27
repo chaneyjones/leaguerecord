@@ -125,10 +125,12 @@ app.get('/recentrecord/:region/:gameName/:tagLine', async (req, res) => {
 
     res.send(`${gameName}'s recent record: ${wins} wins, ${losses} losses${lpChangeText}`);
 
-  } catch (error) {
-    console.error('Error:', error.response?.data || error.message);
-    res.status(500).send('Error detecting gaming sessions');
-  }
+ catch (error) {
+  const status = error.response?.status;
+  const data = error.response?.data;
+  console.error('Error:', status, data || error.message);
+  res.status(500).send(`Error: ${status} - ${JSON.stringify(data || error.message)}`);
+}
 });
 
 app.listen(PORT, "0.0.0.0", () => {
