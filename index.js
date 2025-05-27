@@ -73,6 +73,8 @@ app.get('/recentrecord/:region/:gameName/:tagLine', async (req, res) => {
           `https://${regionToRegionGroup(region)}.api.riotgames.com/lol/match/v5/matches/${matchId}`,
           { headers: { 'X-Riot-Token': RIOT_API_KEY } }
         ).catch(e => null)
+                   }
+};
     );
 
     const validMatches = matchDetails
