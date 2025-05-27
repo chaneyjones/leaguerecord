@@ -37,7 +37,6 @@ app.get('/recentrecord/:region/:gameName/:tagLine', async (req, res) => {
 
   try {
     // 1. Get player's PUUID and summoner data
-    const [accountRes, summonerRes] = await Promise.all([
    console.log('Riot API key starts with:', RIOT_API_KEY.slice(0, 10));
 
 const [accountRes, summonerRes] = await Promise.all([
