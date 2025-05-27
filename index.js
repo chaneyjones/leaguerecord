@@ -1,5 +1,5 @@
 const express = require('express');
-const axios = require('axios'); // Replace node-fetch with axios
+const axios = require('axios'); 
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -12,7 +12,7 @@ app.get('/recentrecord/:region/:gameName/:tagLine', async (req, res) => {
     // Get PUUID
     const accountRes = await axios.get(
       `https://${regionToRegionGroup(region)}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`,
-      { headers: { 'X-Riot-Token': RIOT_API_KEY } } // Riot API uses X-Riot-Token
+      { headers: { 'X-Riot-Token': RIOT_API_KEY } } 
     );
     const puuid = accountRes.data.puuid;
 
@@ -59,9 +59,9 @@ function regionToRegionGroup(region) {
     eun1: 'europe',
     kr: 'asia',
     jp1: 'asia',
-    // Add more regions if needed
+   
   };
-  return groups[region.toLowerCase()] || 'americas'; // Default fallback
+  return groups[region.toLowerCase()] || 'americas'; 
 }
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
