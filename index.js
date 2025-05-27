@@ -38,16 +38,18 @@ app.get('/recentrecord/:region/:gameName/:tagLine', async (req, res) => {
   try {
     // 1. Get player's PUUID and summoner data
     const [accountRes, summonerRes] = await Promise.all([
-     console.log('Riot API key starts with:', RIOT_API_KEY.slice(0, 10));
-      axios.get(
-        `https://${regionToRegionGroup(region)}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`,
-        { headers: { 'X-Riot-Token': RIOT_API_KEY } }
-      ),
-      axios.get(
-        `https://${region}.api.riotgames.com/lol/summoner/v4/summoners/by-name/${encodeURIComponent(gameName)}`,
-        { headers: { 'X-Riot-Token': RIOT_API_KEY } }
-      )
-    ]);
+   console.log('Riot API key starts with:', RIOT_API_KEY.slice(0, 10));
+
+const [accountRes, summonerRes] = await Promise.all([
+  axios.get(
+    `https://${regionToRegionGroup(region)}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`,
+    { headers: { 'X-Riot-Token': RIOT_API_KEY } }
+  ),
+  axios.get(
+    `https://${region}.api.riotgames.com/lol/summoner/v4/summoners/by-name/${encodeURIComponent(gameName)}`,
+    { headers: { 'X-Riot-Token': RIOT_API_KEY } }
+  )
+]);
 
     const puuid = accountRes.data.puuid;
     const summonerId = summonerRes.data.id;
