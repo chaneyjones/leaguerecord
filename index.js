@@ -105,7 +105,7 @@ app.get('/recentrecord/:region/:gameName/:tagLine', async (req, res) => {
     const losses = latestSession.filter(m => !m.win).length;
 
     // 7. Format response
-    res.send(`${gameName}#${tagLine}'s recent record: ${wins} wins, ${losses} losses`);
+    res.send(`${gameName} 's recent record: ${wins} wins, ${losses} losses`);
 
   } catch (error) {
     console.error('API Error:', {
