@@ -100,7 +100,6 @@ app.get('/recentrecord/:region/:gameName/:tagLine', async (req, res) => {
     res.status(500).send('Error detecting gaming sessions');
   }
 });
-const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {  
   console.log(`Server running on port ${PORT}`);
 
