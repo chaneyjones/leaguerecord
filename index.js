@@ -1,16 +1,22 @@
+const express = require('express');
+const fetch = require('node-fetch');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+const RIOT_API_KEY = process.env.RIOT_API_KEY;
+
 app.get('/recentrecord/:region/:gameName/:tagLine', async (req, res) => {
   const { region, gameName, tagLine } = req.params;
 
   try {
-    // Fetch player PUUID via Riot ID
+    // Get player's PUUID via Riot ID
     const accountRes = await fetch(
       `https://${regionToRegionGroup(region)}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}?api_key=${RIOT_API_KEY}`
     );
     const accountData = await accountRes.json();
-
     const puuid = accountData.puuid;
 
-    // Fetch recent match IDs
+    // Recent match IDs
     const matchIdsRes = await fetch(
       `https://${regionToRegionGroup(region)}.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids?start=0&count=10&api_key=${RIOT_API_KEY}`
     );
@@ -18,7 +24,6 @@ app.get('/recentrecord/:region/:gameName/:tagLine', async (req, res) => {
 
     let wins = 0, losses = 0;
 
-    // Fetch match details
     for (const matchId of matchIds) {
       const matchRes = await fetch(
         `https://${regionToRegionGroup(region)}.api.riotgames.com/lol/match/v5/matches/${matchId}?api_key=${RIOT_API_KEY}`
@@ -35,3 +40,22 @@ app.get('/recentrecord/:region/:gameName/:tagLine', async (req, res) => {
     res.status(500).send('Error fetching recent games.');
   }
 });
+
+function regionToRegionGroup(region) {
+  const groups = {
+    na1: 'americas',
+    br1: 'americas',
+    la1: 'americas',
+    la2: 'americas',
+    euw1: 'europe',
+    eun1: 'europe',
+    ru: 'europe',
+    tr1: 'europe',
+    kr: 'asia',
+    jp1: 'asia',
+    oc1: 'sea',
+  };
+  return groups[region];
+}
+
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
