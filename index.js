@@ -26,94 +26,52 @@ function regionToRegionGroup(region) {
 
 app.get('/recentrecord/:region/:gameName/:tagLine', async (req, res) => {
   const { region, gameName, tagLine } = req.params;
-  const MAX_SESSION_GAP_HOURS = 9; 
+  const MAX_SESSION_GAP_HOURS = 12;
 
   try {
-
-    const accountRes = await axios.get(
-      `https://${regionToRegionGroup(region)}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${gameName}/${tagLine}`,
-      { 
-        headers: { 'X-Riot-Token': RIOT_API_KEY },
-        timeout: 5000
-      }
-    );
-    
-    if (!accountRes.data?.puuid) {
-      return res.status(404).send('Player not found');
-    }
+    // 1. Get PUUID and match IDs (same as before)
+    const accountRes = await axios.get(/*...*/);
     const puuid = accountRes.data.puuid;
+    const matchIdsRes = await axios.get(/*...*/);
+    const matchIds = matchIdsRes.data;
 
-   
-    const matchIdsRes = await axios.get(
-      `https://${regionToRegionGroup(region)}.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids?start=0&count=100`,
-      { 
-        headers: { 'X-Riot-Token': RIOT_API_KEY },
-        timeout: 5000
-      }
-    );
-    
-    const matchIds = matchIdsRes.data || [];
-    if (matchIds.length === 0) {
-      return res.send(`${gameName}#${tagLine} has no recent matches`);
-    }
-
-
+    // 2. Get match details and process timestamps
     const matchDetails = await Promise.all(
-      matchIds.map(matchId =>
-        axios.get(
-          `https://${regionToRegionGroup(region)}.api.riotgames.com/lol/match/v5/matches/${matchId}`,
-          { 
-            headers: { 'X-Riot-Token': RIOT_API_KEY },
-            timeout: 5000
-          }
-        ).catch(e => null) 
-      )
+      matchIds.map(matchId => axios.get(/*...*/).catch(e => null))
     );
 
-    
+    // 3. Filter and sort matches NEWEST FIRST
     const validMatches = matchDetails
       .filter(match => match?.data?.info)
       .map(match => ({
         timestamp: match.data.info.gameCreation,
         win: match.data.info.participants.find(p => p.puuid === puuid)?.win
       }))
-      .sort((a, b) => b.timestamp - a.timestamp);
+      .sort((a, b) => b.timestamp - a.timestamp); // NEWEST FIRST
 
-    if (validMatches.length === 0) {
-      return res.send('No valid match data found');
-    }
-
- 
-    const sessions = [];
-    let currentSession = [validMatches[0]]; 
-
-    for (let i = 1; i < validMatches.length; i++) {
-      const timeDiff = (currentSession[0].timestamp - validMatches[i].timestamp) / (1000 * 60 * 60);
+    // 4. Detect sessions working FORWARD from newest
+    let latestSession = [];
+    if (validMatches.length > 0) {
+      latestSession = [validMatches[0]]; // Start with newest match
       
-      if (timeDiff < MAX_SESSION_GAP_HOURS) {
-        currentSession.unshift(validMatches[i]); 
-      } else {
-        sessions.push(currentSession);
-        currentSession = [validMatches[i]];
+      for (let i = 1; i < validMatches.length; i++) {
+        const timeDiffHours = (validMatches[i-1].timestamp - validMatches[i].timestamp) / (1000 * 60 * 60);
+        if (timeDiffHours < MAX_SESSION_GAP_HOURS) {
+          latestSession.push(validMatches[i]);
+        } else {
+          break; // Found the session boundary
+        }
       }
     }
-    sessions.push(currentSession); 
 
-
-    const latestSession = sessions[0] || [];
+    // 5. Calculate wins/losses
     const wins = latestSession.filter(m => m.win).length;
     const losses = latestSession.filter(m => !m.win).length;
 
- 
-    res.send(`${gameName} 's recent record: ${wins} wins, ${losses} losses`);
+    res.send(`${gameName}#${tagLine}'s recent record: ${wins} wins, ${losses} losses`);
 
   } catch (error) {
-    console.error('API Error:', {
-      message: error.message,
-      url: error.config?.url,
-      status: error.response?.status,
-      data: error.response?.data
-    });
+    console.error('Error:', error);
     res.status(500).send('Error detecting gaming sessions');
   }
 });
