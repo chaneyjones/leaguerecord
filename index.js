@@ -5,6 +5,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const RIOT_API_KEY = process.env.RIOT_API_KEY;
 
+const path = require('path');
+app.use(express.static(path.join(__dirname)));
+
 app.use(express.json());
 
 function regionToRegionGroup(region) {
