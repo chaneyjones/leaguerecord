@@ -5,7 +5,6 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const RIOT_API_KEY = process.env.RIOT_API_KEY;
 
-
 app.use(express.json());
 
 function regionToRegionGroup(region) {
@@ -24,6 +23,7 @@ function regionToRegionGroup(region) {
   };
   return groups[region.toLowerCase()] || 'americas';
 }
+
 const path = require('path');
 
 app.get('/recentrecord/:region/:username/:tagline/riot.txt', (req, res) => {
@@ -32,7 +32,7 @@ app.get('/recentrecord/:region/:username/:tagline/riot.txt', (req, res) => {
 
 app.get('/recentrecord/:region/:gameName/:tagLine', async (req, res) => {
   const { region, gameName, tagLine } = req.params;
-  const MAX_SESSION_GAP_HOURS = 12;
+  const MAX_SESSION_GAP_HOURS = 8; // <-- Edit this to change the length of time before it is considered a new session
 
   try {
     // 1. Get player's PUUID
@@ -40,6 +40,19 @@ app.get('/recentrecord/:region/:gameName/:tagLine', async (req, res) => {
       `https://${regionToRegionGroup(region)}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}?api_key=${RIOT_API_KEY}`
     );
     const puuid = accountRes.data.puuid;
+
+    // Get summoner ID for LP tracking
+    const summonerRes = await axios.get(
+      `https://${region}.api.riotgames.com/lol/summoner/v4/summoners/by-name/${encodeURIComponent(gameName)}?api_key=${RIOT_API_KEY}`
+    );
+    const summonerId = summonerRes.data.id;
+
+    // Get initial LP (before session)
+    const rankedBeforeRes = await axios.get(
+      `https://${region}.api.riotgames.com/lol/league/v4/entries/by-summoner/${summonerId}?api_key=${RIOT_API_KEY}`
+    );
+    const soloQueueBefore = rankedBeforeRes.data.find(entry => entry.queueType === 'RANKED_SOLO_5x5');
+    const startLP = soloQueueBefore?.leaguePoints ?? null;
 
     // 2. Get recent match IDs
     const matchIdsRes = await axios.get(
@@ -84,14 +97,27 @@ app.get('/recentrecord/:region/:gameName/:tagLine', async (req, res) => {
     const wins = latestSession.filter(m => m.win).length;
     const losses = latestSession.filter(m => !m.win).length;
 
-    res.send(`${gameName} 's recent record: ${wins} wins, ${losses} losses`);
+    // Get LP after session
+    const rankedAfterRes = await axios.get(
+      `https://${region}.api.riotgames.com/lol/league/v4/entries/by-summoner/${summonerId}?api_key=${RIOT_API_KEY}`
+    );
+    const soloQueueAfter = rankedAfterRes.data.find(entry => entry.queueType === 'RANKED_SOLO_5x5');
+    const endLP = soloQueueAfter?.leaguePoints ?? null;
+
+    // Calculate LP change if both values are available
+    let lpChangeText = '';
+    if (startLP !== null && endLP !== null) {
+      const lpDiff = endLP - startLP;
+      lpChangeText = ` (${lpDiff >= 0 ? '+' : ''}${lpDiff} LP)`;
+    }
+
+    res.send(`${gameName} 's recent record: ${wins} wins, ${losses} losses${lpChangeText}`);
 
   } catch (error) {
     console.error('Error:', error);
     res.status(500).send('Error detecting gaming sessions');
   }
 });
-
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
