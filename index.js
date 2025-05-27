@@ -5,7 +5,6 @@ require('dotenv').config();
 
 const PORT = process.env.PORT || 3000;
 
-// Maps platform region to routing region for Riot's match/account API
 const regionMap = {
   na1: 'americas',
   br1: 'americas',
@@ -27,13 +26,10 @@ function isSameSession(game1, game2) {
 app.get('/recentrecord/:region/:username/:tagline', async (req, res) => {
   const { region, username, tagline } = req.params;
   const routingRegion = regionMap[region.toLowerCase()];
-
-  if (!routingRegion) {
-    return res.status(400).send('Invalid region.');
-  }
+  if (!routingRegion) return res.status(400).send('Invalid region.');
 
   try {
-    // 1. Get PUUID
+    // Get PUUID
     const summonerResp = await axios.get(
       `https://${routingRegion}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${username}/${tagline}`,
       {
@@ -42,7 +38,7 @@ app.get('/recentrecord/:region/:username/:tagline', async (req, res) => {
     );
     const puuid = summonerResp.data.puuid;
 
-    // 2. Get match list
+    // Get match list (latest 20)
     const matchIdsResp = await axios.get(
       `https://${routingRegion}.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids?start=0&count=20`,
       {
@@ -61,7 +57,6 @@ app.get('/recentrecord/:region/:username/:tagline', async (req, res) => {
           headers: { 'X-Riot-Token': process.env.RIOT_API_KEY },
         }
       );
-
       const match = matchResp.data;
       const gameEnd = match.info.gameEndTimestamp;
       if (!lastGameTime || isSameSession(gameEnd, lastGameTime)) {
@@ -72,12 +67,13 @@ app.get('/recentrecord/:region/:username/:tagline', async (req, res) => {
       }
     }
 
-    let wins = 0,
-      losses = 0,
-      lpStart = null,
-      lpEnd = null;
+    if (sessionMatches.length === 0) {
+      return res.send(`${username} has no recent session data.`);
+    }
 
-    // Get summoner ID for LP tracking
+    let wins = 0;
+    let losses = 0;
+
     const summonerInfo = await axios.get(
       `https://${region}.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/${puuid}`,
       {
@@ -86,42 +82,42 @@ app.get('/recentrecord/:region/:username/:tagline', async (req, res) => {
     );
     const summonerId = summonerInfo.data.id;
 
-    for (let i = 0; i < sessionMatches.length; i++) {
-      const match = sessionMatches[i];
-      const participant = match.info.participants.find(
-        (p) => p.puuid === puuid
-      );
+    for (let match of sessionMatches) {
+      const participant = match.info.participants.find(p => p.puuid === puuid);
       if (participant.win) wins++;
       else losses++;
-
-      if (i === sessionMatches.length - 1) {
-        const startLPResp = await axios.get(
-          `https://${region}.api.riotgames.com/lol/league/v4/entries/by-summoner/${summonerId}`,
-          {
-            headers: { 'X-Riot-Token': process.env.RIOT_API_KEY },
-          }
-        );
-        lpStart =
-          startLPResp.data.find(
-            (entry) => entry.queueType === 'RANKED_SOLO_5x5'
-          )?.leaguePoints || 0;
-      }
-
-      if (i === 0) {
-        const endLPResp = await axios.get(
-          `https://${region}.api.riotgames.com/lol/league/v4/entries/by-summoner/${summonerId}`,
-          {
-            headers: { 'X-Riot-Token': process.env.RIOT_API_KEY },
-          }
-        );
-        lpEnd =
-          endLPResp.data.find(
-            (entry) => entry.queueType === 'RANKED_SOLO_5x5'
-          )?.leaguePoints || 0;
-      }
     }
 
+    // Most recent match is the first (latest timestamp)
+    // Oldest match is the last (earliest timestamp)
+    const newestMatch = sessionMatches[0];
+    const oldestMatch = sessionMatches[sessionMatches.length - 1];
+
+    // Fetch current LP (after newest match)
+    const endLPResp = await axios.get(
+      `https://${region}.api.riotgames.com/lol/league/v4/entries/by-summoner/${summonerId}`,
+      {
+        headers: { 'X-Riot-Token': process.env.RIOT_API_KEY },
+      }
+    );
+    const lpEnd =
+      endLPResp.data.find(e => e.queueType === 'RANKED_SOLO_5x5')?.leaguePoints || 0;
+
+    // Pause briefly to respect rate limits (optional but safe)
+    await new Promise(r => setTimeout(r, 1500));
+
+    // Fetch LP again (after the *oldest* match)
+    const lpStartResp = await axios.get(
+      `https://${region}.api.riotgames.com/lol/league/v4/entries/by-summoner/${summonerId}`,
+      {
+        headers: { 'X-Riot-Token': process.env.RIOT_API_KEY },
+      }
+    );
+    const lpStart =
+      lpStartResp.data.find(e => e.queueType === 'RANKED_SOLO_5x5')?.leaguePoints || 0;
+
     const lpChange = lpEnd - lpStart;
+
     res.send(
       `${username}'s recent record: ${wins} wins, ${losses} losses (${lpChange >= 0 ? '+' : ''}${lpChange} LP)`
     );
