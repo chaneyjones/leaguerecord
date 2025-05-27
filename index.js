@@ -29,18 +29,28 @@ app.get('/recentrecord/:region/:gameName/:tagLine', async (req, res) => {
   const MAX_SESSION_GAP_HOURS = 12;
 
   try {
-    // 1. Get PUUID and match IDs (same as before)
-    const accountRes = await axios.get(/*...*/);
+    // 1. Get player's PUUID
+    const accountRes = await axios.get(
+      `https://${regionToRegionGroup(region)}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}?api_key=${RIOT_API_KEY}`
+    );
     const puuid = accountRes.data.puuid;
-    const matchIdsRes = await axios.get(/*...*/);
+
+    // 2. Get recent match IDs
+    const matchIdsRes = await axios.get(
+      `https://${regionToRegionGroup(region)}.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids?start=0&count=10&api_key=${RIOT_API_KEY}`
+    );
     const matchIds = matchIdsRes.data;
 
-    // 2. Get match details and process timestamps
+    // 3. Fetch match details and process timestamps
     const matchDetails = await Promise.all(
-      matchIds.map(matchId => axios.get(/*...*/).catch(e => null))
+      matchIds.map(matchId => 
+        axios.get(
+          `https://${regionToRegionGroup(region)}.api.riotgames.com/lol/match/v5/matches/${matchId}?api_key=${RIOT_API_KEY}`
+        ).catch(e => null)
+      )
     );
 
-    // 3. Filter and sort matches NEWEST FIRST
+    // 4. Filter and sort matches NEWEST FIRST
     const validMatches = matchDetails
       .filter(match => match?.data?.info)
       .map(match => ({
@@ -49,7 +59,7 @@ app.get('/recentrecord/:region/:gameName/:tagLine', async (req, res) => {
       }))
       .sort((a, b) => b.timestamp - a.timestamp); // NEWEST FIRST
 
-    // 4. Detect sessions working FORWARD from newest
+    // 5. Detect sessions working FORWARD from newest
     let latestSession = [];
     if (validMatches.length > 0) {
       latestSession = [validMatches[0]]; // Start with newest match
@@ -59,12 +69,12 @@ app.get('/recentrecord/:region/:gameName/:tagLine', async (req, res) => {
         if (timeDiffHours < MAX_SESSION_GAP_HOURS) {
           latestSession.push(validMatches[i]);
         } else {
-          break; // Found the session boundary
+          break; // Session gap detected
         }
       }
     }
 
-    // 5. Calculate wins/losses
+    // 6. Calculate wins/losses
     const wins = latestSession.filter(m => m.win).length;
     const losses = latestSession.filter(m => !m.win).length;
 
@@ -75,6 +85,7 @@ app.get('/recentrecord/:region/:gameName/:tagLine', async (req, res) => {
     res.status(500).send('Error detecting gaming sessions');
   }
 });
+
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
