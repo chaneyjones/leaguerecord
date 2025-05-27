@@ -67,15 +67,14 @@ app.get('/recentrecord/:region/:gameName/:tagLine', async (req, res) => {
     const matchIds = matchIdsRes.data;
 
     // 4. Process matches
-    const matchDetails = await Promise.all(
-      matchIds.map(matchId => 
-        axios.get(
-          `https://${regionToRegionGroup(region)}.api.riotgames.com/lol/match/v5/matches/${matchId}`,
-          { headers: { 'X-Riot-Token': RIOT_API_KEY } }
-        ).catch(e => null)
-                   }
-};
-    );
+   const matchDetails = await Promise.all(
+  matchIds.map(matchId => 
+    axios.get(
+      `https://${regionToRegionGroup(region)}.api.riotgames.com/lol/match/v5/matches/${matchId}`,
+      { headers: { 'X-Riot-Token': RIOT_API_KEY } }
+    ).catch(e => null)
+  )
+);
 
     const validMatches = matchDetails
       .filter(match => match?.data?.info)
