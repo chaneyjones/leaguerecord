@@ -119,7 +119,7 @@ app.get('/recentrecord/:region/:username/:tagline', async (req, res) => {
     const lpChange = lpEnd - lpStart;
 
     res.send(
-      `${username}'s recent record: ${wins} wins, ${losses} losses (${lpChange >= 0 ? '+' : ''}${lpChange} LP)`
+      `${username}'s recent record: ${wins} wins, ${losses} losses`
     );
   } catch (err) {
     console.error('Error:', err?.response?.data || err.message);
